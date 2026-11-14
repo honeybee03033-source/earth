@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>地球ライブ壁紙</title>
+<style>
+:root{color-scheme:dark;--bg:#02030a;--fg:#eef2fb;--dim:#8d96ad}
+html,body{margin:0;height:100%;background:var(--bg);overflow:hidden;font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif}
+canvas{display:block;width:100%;height:100%}
+#ov{position:fixed;left:0;top:0;pointer-events:none}
+.tag{position:fixed;left:0;top:0;transform:translate(-50%,-50%);font-size:13px;letter-spacing:.2em;color:var(--fg);padding:3px 10px;border-radius:99px;background:rgba(10,16,34,.45);border:1px solid rgba(160,190,255,.25);pointer-events:none;text-shadow:0 1px 4px #000;white-space:nowrap}
+#hud{position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(14px + env(safe-area-inset-bottom,0px));text-align:center;color:var(--fg);pointer-events:none;text-shadow:0 1px 8px #000}
+#clock{font-size:clamp(22px,5vw,36px);font-weight:200;letter-spacing:.08em;font-variant-numeric:tabular-nums}
+#sub{font-size:12px;color:var(--dim);margin-top:3px;line-height:1.6}
+#season{display:flex;justify-content:center;gap:10px;margin-bottom:8px}
+.ch{display:inline-flex;align-items:center;gap:8px;padding:6px 15px 6px 12px;border-radius:99px;background:rgba(10,16,34,.5);border:1px solid rgba(160,190,255,.22);font-size:15px;letter-spacing:.14em;backdrop-filter:blur(6px);box-shadow:0 0 18px rgba(0,0,0,.35)}
+.ch svg{color:var(--c);filter:drop-shadow(0 0 4px var(--c))}
+.ch small{font-size:11px;color:var(--dim);letter-spacing:.1em}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas><canvas id="ov"></canvas>
+<div class="tag" id="tAm">朝</div><div class="tag" id="tPm">夕</div><div class="tag" id="tDay">昼</div><div class="tag" id="tNight">夜</div><div class="tag" id="tMoon">月</div><div class="tag" id="tYou" style="display:none"></div>
+<div id="hud"><div id="season"></div><div id="clock"></div><div id="sub"></div></div>
+<script>
+const FS=`
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+uniform vec2 R;uniform vec3 a,b,c,uM,uS;uniform float T,uD;uniform sampler2D M,L;
+float h(vec3 p){p=fract(p*.3183099+.1);p*=17.;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}
+float n3(vec3 x){vec3 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);
+return mix(mix(mix(h(i),h(i+vec3(1,0,0)),f.x),mix(h(i+vec3(0,1,0)),h(i+vec3(1,1,0)),f.x),f.y),
+mix(mix(h(i+vec3(0,0,1)),h(i+vec3(1,0,1)),f.x),mix(h(i+vec3(0,1,1)),h(i+vec3(1,1,1)),f.x),f.y),f.z);}
+float fbm(vec3 p){float s=0.,q=.5;for(int i=0;i<5;i++){s+=q*n3(p);p*=2.03;q*=.5;}return s*1.03;}
+float fb3(vec3 p){float s=0.,q=.5;for(int i=0;i<3;i++){s+=q*n3(p);p*=2.03;q*=.5;}return s*1.14;}
+float rg(vec3 p){float s=0.,q=.5;for(int i=0;i<4;i++){s+=q*(1.-abs(2.*n3(p)-1.));p*=2.1;q*=.5;}return s*1.07;}
+float cd(vec3 v){float lt=asin(clamp(v.z,-1.,1.));vec3 q=v*3.+vec3(T*.003,T*.0015,0.);
+ float w=fb3(q*.7);float d=fbm(q*1.6+w*2.2);float thr=.6-.07*cos(lt*7.2);return smoothstep(thr,thr+.26,d);}
+float hf(vec3 v,float ld,float mg){return ld*(.3*fbm(v*9.)+mg*1.1*rg(v*20.)+.12*mg*rg(v*70.));}
+void main(){
+ vec2 fc=gl_FragCoord.xy;float sc=min(R.x,R.y)*.27;
+ vec2 p=(fc-.5*R)/sc;float r=length(p);
+ vec3 A=uS;
+ vec3 col=vec3(.004,.006,.016)+vec3(.015,.025,.06)*(1.-length(fc/R-.5)*1.3);
+ vec2 g=floor(fc/1.8);float sh0=h(vec3(g,3.));col+=step(.9962,sh0)*(.25+.75*h(vec3(g,9.)))*mix(vec3(1.,.85,.7),vec3(.7,.85,1.),h(vec3(g,5.)));
+ float md=(fc.x/R.x-.5)*.7+(fc.y/R.y-.5)*.9;col+=vec3(.035,.04,.06)*exp(-md*md/.02)*(.3+.9*fbm(vec3(fc/260.,2.)))*(.5+.8*fbm(vec3(fc/40.,5.)));
+ if(r>1.){float nb=smoothstep(.42,.85,fbm(vec3(fc/R.y*2.2,1.7)));
+  col+=mix(vec3(.09,.03,.17),vec3(.02,.09,.2),fbm(vec3(fc/R.y*1.3,6.)))*nb*.55;}
+ vec2 g2=floor(fc/7.);float hs=h(vec3(g2,11.));vec2 fq=fract(fc/7.)-.5;
+ col+=step(.982,hs)*exp(-dot(fq,fq)*55.)*(.5+.5*sin(T*(1.+hs*3.)+hs*60.))*mix(vec3(.7,.8,1.),vec3(1.,.85,.65),h(vec3(g2,13.)))*.9;
+ vec2 rd=p/max(r,.001);float nl=dot(rd,A.xy);
+ if(r>=1.){float lit=smoothstep(-.35,.5,nl);
+  vec3 sk=mix(vec3(.16,.4,1.),vec3(1.,.45,.15),exp(-pow(nl/.25,2.))*.8);
+  col+=sk*(exp(-(r-1.)*60.)*.85+exp(-(r-1.)*20.)*.1)*lit;
+  col+=vec3(.03,.14,.1)*exp(-(r-1.)*45.)*(1.-lit)*.06+vec3(.02,.05,.14)*exp(-(r-1.)*14.)*(1.-lit)*.03;}
+ float mr=.18;vec2 dd=p-uM.xy;float dl=length(dd);vec3 mcol=vec3(0.);float ma=smoothstep(mr,mr-3./sc,dl);
+ if(ma>0.){float zz=sqrt(max(mr*mr-dl*dl,0.));vec3 mn=vec3(dd,zz)/mr;
+  vec3 ez=-normalize(uM),ey=normalize(vec3(0,1,0)-ez*ez.y),ex=cross(ey,ez);vec3 q=vec3(dot(mn,ex),dot(mn,ey),dot(mn,ez));
+  float mar=smoothstep(.48,.62,fbm(q*2.6));
+  vec3 mc=mix(vec3(.68,.69,.72),vec3(.28,.29,.34),mar*.85)*(.8+.3*fbm(q*16.)+.15*rg(q*40.)-.1);
+  mcol=mc*(.006+max(dot(mn,A),0.)*1.35)+mc*vec3(.5,.6,1.)*.03*max(dot(mn,ez),0.);
+  mcol=1.-exp(-mcol*1.4);}
+ col+=vec3(.65,.75,1.)*exp(-max(dl-mr,0.)*20.)*.13*(1.-dot(normalize(uM),A))*.5*step(mr,dl);
+ if(uM.z<=0.)col=mix(col,mcol,ma);
+ if(r<1.){
+  vec3 n=vec3(p,sqrt(1.-r*r));float ndl=dot(n,A);
+  vec3 ve=a*n.x+b*n.y+c*n.z;vec3 sd=a*A.x+b*A.y+c*A.z;sd-=ve*dot(sd,ve);
+  float lat=asin(clamp(ve.z,-1.,1.));float al=abs(lat)*57.2958;float se=uD*sign(ve.z);
+  vec3 wv=ve+(vec3(fbm(ve*40.),fbm(ve*40.+7.),fbm(ve*40.+13.))-.5)*.012;
+  vec2 uv=vec2(atan(wv.y,wv.x)/6.2832+.5,.5-asin(clamp(wv.z,-1.,1.))/3.1416);
+  vec3 t=texture2D(M,uv).rgb;float m=t.r;
+  float fn=fbm(ve*90.)-.5;float land=smoothstep(.47+fn*.3,.53+fn*.3,m);
+  float h0=hf(ve,land,t.g),h1=hf(normalize(ve+sd*.005),land,t.g);
+  float hum=fbm(ve*5.+4.);
+  vec3 lc=mix(vec3(.2,.27,.08),vec3(.3,.34,.12),fbm(ve*30.));
+  lc=mix(lc,mix(vec3(.04,.14,.04),vec3(.07,.2,.06),fbm(ve*40.)),smoothstep(.45,.6,hum));
+  lc=mix(lc,vec3(.02,.1,.03),(1.-smoothstep(4.,14.,al))*smoothstep(.35,.5,hum));
+  lc=mix(lc,vec3(.05,.11,.07),smoothstep(48.,56.,al)*(1.-smoothstep(66.,72.,al)));
+  lc=mix(lc,vec3(.28,.28,.22),smoothstep(62.,70.,al));
+  lc=mix(lc,vec3(.32,.27,.15),smoothstep(25.,45.,al)*(.5-.5*se)*.45);
+  vec3 dc=mix(vec3(.62,.46,.26),vec3(.72,.52,.3),fbm(ve*12.));dc=mix(dc,vec3(.5,.3,.18),smoothstep(.55,.75,fbm(ve*25.))*.6);
+  lc=mix(lc,dc,smoothstep(.3,.8,t.b+(fbm(ve*9.)-.5)*.5));
+  lc=mix(lc,vec3(.33,.28,.24),smoothstep(.3,.7,h0)*.7);
+  lc=mix(lc,vec3(.95),smoothstep(.62,.85,h0+al*.004));
+  lc=mix(lc,vec3(.9,.93,.97),smoothstep(62.+se*9.,74.+se*9.,al+(fbm(ve*10.)-.5)*14.));
+  lc*=.85+.3*fbm(ve*150.);
+  vec3 oc=mix(vec3(.004,.03,.11),vec3(.01,.1,.26),fbm(ve*6.));
+  oc=mix(oc,vec3(.04,.36,.45),smoothstep(.05,.5,m)*(1.-land)*.9);
+  oc=mix(oc,vec3(.8,.88,.95),smoothstep(70.+se*6.,80.+se*6.,al+(fbm(ve*14.)-.5)*10.)*(1.-land));
+  vec3 alb=mix(oc,lc,land);
+  float diff=max(ndl,0.);float shade=mix(1.,clamp(1.-(h1-h0)*28.,.55,1.45),land);
+  vec3 H=normalize(A+vec3(0,0,1));float gg=max(dot(n,H),0.);
+  float spec=(pow(gg,90.)*.5+pow(gg,900.)*6.)*(1.-land)*smoothstep(0.,.2,ndl)*(.6+.8*n3(ve*300.+T*.2));
+  float cs=cd(normalize(ve+sd*.012));
+  vec3 s=alb*(vec3(.008,.014,.035)+diff*1.3*shade*(1.-.5*cs))+spec*vec3(1.,.95,.85);
+  float cl=cd(ve),cl2=cd(normalize(ve+sd*.02));
+  vec3 cc=vec3(.016,.022,.045)+vec3(1.)*diff*(1.15-.45*cl2)+vec3(1.,.5,.25)*exp(-pow(ndl/.12,2.))*.5;
+  s=mix(s,cc,cl*.92);
+  float nt=1.-smoothstep(-.12,.03,ndl);
+  float lg=texture2D(L,uv).r;
+  float lgb=(texture2D(L,uv+vec2(.004,0.)).r+texture2D(L,uv-vec2(.004,0.)).r+texture2D(L,uv+vec2(0.,.007)).r+texture2D(L,uv-vec2(0.,.007)).r)*.25;
+  float li=(smoothstep(.05,.6,lg)*(.4+.8*smoothstep(.3,.8,fbm(ve*180.)))+smoothstep(.02,.4,lgb)*.08)*land;
+  vec3 lcl=mix(vec3(1.,.68,.36),vec3(1.,.84,.66),smoothstep(.6,1.,lg));
+  s+=lcl*li*nt*(1.-cl*.85)*.75;
+  float fr=pow(1.-n.z,2.4);float day=smoothstep(-.25,.45,ndl);vec3 ry=vec3(.22,.5,1.);
+  s=mix(s,ry*day*.55,fr*.3);
+  s+=ry*fr*(.06+1.3*day);
+  s+=vec3(1.,.4,.1)*pow(1.-n.z,1.5)*exp(-pow(ndl/.16,2.))*.8;
+  s+=vec3(.5,.15,.05)*exp(-pow(ndl/.08,2.))*.12*(1.-cl);
+  s=1.-exp(-s*1.5);
+  col=mix(col,s,smoothstep(1.,1.-3./sc,r));
+ }
+ if(uM.z>0.)col=mix(col,mcol,ma);
+ gl_FragColor=vec4(pow(col,vec3(.4545)),1.);
+}`;
+const VS="attribute vec2 q;void main(){gl_Position=vec4(q,0.,1.);}";
+// 簡易大陸ポリゴン [経度,緯度,...]
+const LAND=[
+[-168,66,-157,71,-141,70,-125,70,-110,68,-95,68,-85,70,-80,63,-78,58,-80,52,-68,60,-62,60,-56,52,-60,47,-66,44,-70,42,-74,40,-76,35,-81,31,-80,26,-82,26,-84,30,-90,29,-94,29,-97,26,-97,22,-94,18,-90,21,-87,21,-88,16,-83,15,-83,10,-77,8,-80,7,-85,10,-92,14,-97,16,-105,20,-106,23,-110,23,-115,30,-117,32,-121,35,-124,40,-124,47,-128,51,-135,58,-145,60,-152,59,-158,57,-165,55,-160,59,-165,62],
+[-77,8,-72,12,-62,10,-52,5,-50,0,-40,-3,-35,-6,-39,-14,-41,-22,-48,-26,-53,-34,-58,-38,-62,-41,-65,-47,-68,-52,-70,-55,-74,-50,-73,-40,-71,-30,-70,-18,-76,-14,-81,-5,-80,0,-78,3],
+[-73,78,-60,82,-30,83,-20,80,-20,70,-30,68,-43,60,-50,64,-55,70,-67,76],
+[-9,37,-9,43,-2,44,-4,48,2,51,8,54,10,57,14,54,21,55,24,59,30,60,34,66,40,66,45,68,60,69,70,73,80,73,100,77,110,74,130,72,145,72,160,70,180,69,180,65,172,62,163,60,162,56,156,51,157,57,150,59,142,59,137,54,141,52,140,48,135,43,130,42,127,40,129,36,126,34,126,38,122,40,121,37,119,35,122,31,121,28,117,23,110,21,108,22,106,19,109,12,105,9,103,10,100,13,100,8,103,2,101,3,98,8,98,16,94,17,92,22,88,22,85,19,80,15,80,10,77,8,73,17,72,21,68,23,66,25,57,25.5,56,27,52,28,48,30,50,26,52,24,56,26,59,22,55,17,44,13,43,16,39,21,35,28,35,33,36,36.5,30,36.5,26,39,23,37,20,40,16,43,13,45.5,8,44,3,43,-1,37,-5,36],
+[5,58,6,62,14,68,20,70,30,71,33,69,30,66,25,65,21,63,18,60,16,57,12,56,11,59,7,58],
+[8,44,12,44,14,42,18,40,16,38,15.5,40,12,42,10,44],
+[-17,15,-17,21,-13,28,-9,32,-6,36,10,37,11,33,20,31,25,32,32,31,34,28,37,22,39,15,43,12,51,12,51,10,44,2,40,-3,39,-8,40,-15,35,-20,35,-25,32,-29,28,-33,20,-35,18,-32,14,-23,12,-14,13,-6,9,-1,9,4,5,6,-2,5,-8,4,-13,8,-17,13],
+[44,-25,47,-25,50,-15,49,-12,44,-17],
+[114,-22,122,-18,130,-12,136,-12,137,-16,142,-11,146,-19,153,-26,150,-37,141,-38,135,-34,130,-32,115,-34,113,-26],
+[172,-34,178,-38,175,-41,172,-41],[172,-41,174,-42,170,-46,167,-46],
+[-5,50,1,51,2,53,-2,56,-2,58.5,-5,58.5,-6,56,-3,54,-5,52],[-10,52,-6,52,-6,55,-9,54.5],[-24,64,-14,64,-14,66,-22,66],
+[131,34,135,34,140,35,142,39,141,41,139,39,136,36,132,35],[140,42,145,43,142,45],
+[95,5,100,2,106,-3,105,-6,101,-3],[109,1,117,7,119,1,116,-4,110,-3],[105,-6,114,-8,106,-7],[131,-1,141,-2,150,-10,141,-9,137,-5],[120,18,122,18,126,7,122,7],
+[-85,22,-80,23,-74,20,-78,20],
+[-180,-78,-150,-76,-120,-74,-100,-72,-75,-73,-62,-65,-58,-63,-62,-70,-60,-75,-45,-78,-20,-72,0,-70,30,-69,70,-67,100,-66,140,-66,165,-70,180,-70,180,-90,-180,-90]
+];
+const SEA=[[-95,60,-94,57,-88,56,-82,53,-79,55,-78,60,-87,64,-94,62],[28,42,28,45,33,46,38,47,41,42,36,41,31,41],[47,45,53,46,54,40,53,37,50,37,49,40]];
+const cv=document.getElementById("c"),gl=cv.getContext("webgl",{antialias:false,powerPreference:"high-performance"});
+const clock=document.getElementById("clock"),sub=document.getElementById("sub");
+if(!gl){sub.textContent="このブラウザはWebGLに対応していません"}
+else{
+const sh=(t,s)=>{const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);return o};
+const pg=gl.createProgram();gl.attachShader(pg,sh(gl.VERTEX_SHADER,VS));gl.attachShader(pg,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(pg);gl.useProgram(pg);
+const bf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,bf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+const ql=gl.getAttribLocation(pg,"q");gl.enableVertexAttribArray(ql);gl.vertexAttribPointer(ql,2,gl.FLOAT,false,0,0);
+// 陸地マスク(R=陸 G=山脈 B=乾燥地)と都市灯り
+const MT=[[74,35,78,33,84,28.5,90,27.8,96,28.5],[68,36,74,36.5],[-125,60,-120,52,-114,48,-110,43,-106,38,-106,34],[-122,48,-121,41,-118,37],[-84,36,-78,39,-72,43],[-72,10,-76,5,-78,-2,-76,-10,-72,-16,-70,-24,-70,-34,-72,-44,-73,-52],[6,45,10,46.5,15,47],[59,66,60,60,59,54],[40,43.5,48,41.5],[-9,31,-3,34,8,36],[36,13,38,8],[29,-25,28,-31],[70,41,80,42,88,43],[6,60,14,66,20,69],[145,-16,150,-26,148,-36],[86,50,98,49],[-152,62,-142,62],[-160,68,-145,68],[-108,29,-104,22,-100,19]];
+const DS=[[8,23,24,7],[47,23,10,7],[103,42,12,4],[133,-25,14,7],[20,-23,7,6],[-70,-23,2,6],[-112,33,6,4],[71,27,4,3],[84,39,6,2.5],[58,36,7,3],[58,40,5,3],[-68,-43,4,5]];
+const CT=[-74,40.7,4,-71,42.4,2,-77,38.9,3,-87.6,41.9,3,-79.4,43.7,2,-83,42.3,2,-84.4,33.7,2,-80.2,25.8,2,-96.8,32.8,2,-95.4,29.8,2,-105,39.7,1,-118.2,34,4,-122.4,37.8,2,-122.3,47.6,2,-112,33.4,1,-99.1,19.4,4,-74,4.7,2,-77,-12,2,-46.6,-23.5,4,-43.2,-22.9,3,-58.4,-34.6,3,-70.7,-33.4,2,-.1,51.5,4,2.3,48.9,3,7,51.4,3,-3.7,40.4,2,12.5,41.9,2,9.2,45.5,2,13.4,52.5,2,21,52.2,2,37.6,55.8,3,29,41,3,31.2,30,4,3.4,6.5,3,28,-26.2,3,36.8,-1.3,1,15.3,-4.3,1,51.4,35.7,3,46.7,24.7,2,55.3,25.2,2,67,24.9,3,77.2,28.6,4,72.9,19,3,88.4,22.6,3,77.6,13,2,90.4,23.8,3,100.5,13.8,3,106.8,-6.2,4,121,14.6,3,106.7,10.8,2,116.4,39.9,4,121.5,31.2,4,113.3,23.1,4,106.5,29.6,2,127,37.6,4,139.7,35.7,5,135.5,34.7,3,121.5,25,2,151.2,-33.9,2,145,-37.8,2];
+const mc=document.createElement("canvas");mc.width=2048;mc.height=1024;const m=mc.getContext("2d");
+const X=l=>(l+180)/360*2048,Y=l=>(90-l)/180*1024;
+m.fillStyle="#000";m.fillRect(0,0,2048,1024);try{m.filter="blur(3px)"}catch(e){}
+const poly=(p,col)=>{m.fillStyle=col;m.beginPath();for(let i=0;i<p.length;i+=2){const x=X(p[i]),y=Y(p[i+1]);i?m.lineTo(x,y):m.moveTo(x,y)}m.closePath();m.fill()};
+LAND.forEach(p=>poly(p,"#f00"));SEA.forEach(p=>poly(p,"#000"));
+m.globalCompositeOperation="lighter";try{m.filter="blur(6px)"}catch(e){}
+m.strokeStyle="#0f0";m.lineWidth=9;m.lineJoin="round";
+MT.forEach(p=>{m.beginPath();for(let i=0;i<p.length;i+=2)i?m.lineTo(X(p[i]),Y(p[i+1])):m.moveTo(X(p[i]),Y(p[i+1]));m.stroke()});
+m.fillStyle="#00f";DS.forEach(d=>{m.beginPath();m.ellipse(X(d[0]),Y(d[1]),d[2]*5.69,d[3]*5.69,0,0,7);m.fill()});
+const lc=document.createElement("canvas");lc.width=1024;lc.height=512;const lg=lc.getContext("2d");lg.fillStyle="#000";lg.fillRect(0,0,1024,512);lg.globalCompositeOperation="lighter";
+let sd=7;const rnd=()=>(sd=sd*16807%2147483647)/2147483647;
+for(let i=0;i<CT.length;i+=3){const x=(CT[i]+180)/360*1024,y=(90-CT[i+1])/180*512,z=CT[i+2],r=2+z*1.7,gr=lg.createRadialGradient(x,y,0,x,y,r);gr.addColorStop(0,"rgba(255,255,255,.9)");gr.addColorStop(.4,"rgba(255,255,255,.3)");gr.addColorStop(1,"rgba(255,255,255,0)");lg.fillStyle=gr;lg.fillRect(x-r,y-r,2*r,2*r);
+for(let k=0;k<z*7;k++){const an=rnd()*6.283,d=rnd()*r*2.4;lg.fillStyle="rgba(255,255,255,"+(.15+rnd()*.25)+")";lg.beginPath();lg.arc(x+Math.cos(an)*d,y+Math.sin(an)*d*.8,1+rnd()*1.3,0,7);lg.fill()}}
+const mk=(c,u)=>{gl.activeTexture(gl.TEXTURE0+u);gl.bindTexture(gl.TEXTURE_2D,gl.createTexture());gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,c);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE)};
+mk(mc,0);mk(lc,1);
+const U=n=>gl.getUniformLocation(pg,n);const uR=U("R"),ua=U("a"),ub=U("b"),uc=U("c"),uT=U("T"),uD=U("uD"),uM=U("uM"),uS=U("uS");gl.uniform1i(U("L"),1);gl.uniform1i(U("M"),0);
+let W,H;const ovc=document.getElementById("ov"),ov=ovc.getContext("2d");
+function resize(){const d=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;cv.width=W*d;cv.height=H*d;gl.viewport(0,0,cv.width,cv.height);gl.uniform2f(uR,cv.width,cv.height);ovc.width=cv.width;ovc.height=cv.height;ovc.style.width=W+"px";ovc.style.height=H+"px";ov.setTransform(d,0,0,d,0,0)}
+addEventListener("resize",resize);resize();
+const D=Math.PI/180,nrm=v=>{const l=Math.hypot(...v);return v.map(x=>x/l)},crs=(x,y)=>[x[1]*y[2]-x[2]*y[1],x[2]*y[0]-x[0]*y[2],x[0]*y[1]-x[1]*y[0]],dot=(x,y)=>x[0]*y[0]+x[1]*y[1]+x[2]*y[2];
+const A=nrm([.82,.26,.5]);let B=[-A[0]*A[1],1-A[1]*A[1],-A[2]*A[1]];B=nrm(B);
+function sunPos(ms){const n=ms/86400000+2440587.5-2451545,L=((280.46+.9856474*n)%360)*D,g=((357.528+.9856003*n)%360)*D,
+lam=L+(1.915*Math.sin(g)+.02*Math.sin(2*g))*D,eps=(23.439-4e-7*n)*D,dec=Math.asin(Math.sin(eps)*Math.sin(lam)),
+ra=Math.atan2(Math.cos(eps)*Math.sin(lam),Math.cos(lam)),gm=((280.46061837+360.98564736629*n)%360)*D;let lo=ra-gm;return [dec,Math.atan2(Math.sin(lo),Math.cos(lo)),lam]}
+const gmst=ms=>((280.46061837+360.98564736629*(ms/86400000+2440587.5-2451545))%360)*D;
+function moonEq(ms){const n=ms/86400000+2440587.5-2451545,Lm=(218.316+13.176396*n)*D,Mm=(134.963+13.064993*n)*D,F=(93.272+13.22935*n)*D,lam=Lm+6.289*D*Math.sin(Mm),bet=5.128*D*Math.sin(F),eps=23.439*D;
+return [Math.atan2(Math.sin(lam)*Math.cos(eps)-Math.tan(bet)*Math.sin(eps),Math.cos(lam)),Math.asin(Math.sin(bet)*Math.cos(eps)+Math.cos(bet)*Math.sin(eps)*Math.sin(lam)),lam]}
+const toEF=(ra,dec,gm)=>{const lo=ra-gm;return [Math.cos(dec)*Math.cos(lo),Math.cos(dec)*Math.sin(lo),Math.sin(dec)]};
+// 現在地(ブラウザの位置情報。使えない場合は日本時間帯なら東京で概算)
+let you=null;
+try{navigator.geolocation&&navigator.geolocation.watchPosition(p=>{you={la:p.coords.latitude,lo:p.coords.longitude,src:"GPS"}},()=>{},{enableHighAccuracy:true,maximumAge:30000})}catch(e){}
+setTimeout(()=>{try{if(!you&&Intl.DateTimeFormat().resolvedOptions().timeZone==="Asia/Tokyo")you={la:35.68,lo:139.69,src:"概算(タイムゾーン)"}}catch(e){}},2500);
+const speeds=[[1,"リアルタイム (×1)"],[600,"1秒 = 10分"],[3600,"1秒 = 1時間"],[21600,"1秒 = 6時間"]];
+let off=0,si=0,sim=Date.now(),last=performance.now();
+addEventListener("pointerdown",()=>{si=(si+1)%speeds.length;if(!si)sim=Date.now()+off});
+const IC=['<path d="M12 21v-8"/><path d="M12 13c0-4-3-6-7-6 0 4 3 6 7 6z"/><path d="M12 11c0-3 2.5-5 6-5 0 3.5-2.5 5-6 5z"/>','<circle cx="12" cy="12" r="4"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>','<path d="M5 19C5 10 10 5 19 5c0 9-5 14-14 14z"/><path d="M5 19L14 10"/>','<path d="M12 2.5v19M3.8 7.2l16.4 9.6M3.8 16.8l16.4-9.6M9.5 4.5L12 7l2.5-2.5M9.5 19.5L12 17l2.5 2.5"/>'],CC=["#f6a9c4","#ffd36b","#f2a057","#a5d8ff"],NM=["春","夏","秋","冬"],
+chip=(h,k)=>'<span class="ch" style="--c:'+CC[k]+'"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">'+IC[k]+'</svg><small>'+h+'</small>'+NM[k]+'</span>';
+const pad=n=>String(n).padStart(2,"0"),$=id=>document.getElementById(id);
+const place=(id,x,y)=>{$(id).style.left=x+"px";$(id).style.top=y+"px"};
+function frame(now){
+ const dt=now-last;last=now;if(!si)sim=Date.now()+off;else sim+=dt*speeds[si][0];
+ const [dec,lon,slam]=sunPos(sim),ae=[Math.cos(dec)*Math.cos(lon),Math.cos(dec)*Math.sin(lon),Math.sin(dec)];
+ // 地球を現在地中心に固定(北が上)
+ const cen=you||{la:30,lo:-new Date().getTimezoneOffset()/60*15},cla=Math.max(-89.5,Math.min(89.5,cen.la))*D,clo=cen.lo*D,
+ ez=[Math.cos(cla)*Math.cos(clo),Math.cos(cla)*Math.sin(clo),Math.sin(cla)],ey=nrm([-ez[0]*ez[2],-ez[1]*ez[2],1-ez[2]*ez[2]]),ex=crs(ey,ez),
+ vw=v=>[dot(v,ex),dot(v,ey),dot(v,ez)],A=vw(ae),gmn=gmst(sim),MD=1.62;
+ const [mra,mdec,mlam]=moonEq(sim),mp=vw(toEF(mra,mdec,gmn)).map(x=>x*MD);
+ gl.uniform3f(uM,...mp);
+ gl.uniform3f(ua,...ex);gl.uniform3f(ub,...ey);gl.uniform3f(uc,...ez);gl.uniform3f(uS,...A);gl.uniform1f(uT,now/1000);gl.uniform1f(uD,Math.sin(dec)/.3978);
+ gl.drawArrays(gl.TRIANGLES,0,3);
+ // ラベル配置
+ const sc=Math.min(W,H)*.27,cx=W/2,cy=H/2,N=vw([0,0,1]),E=nrm(crs(N,A)),e2=Math.hypot(E[0],E[1])||1;
+ place("tAm",cx-E[0]/e2*sc*1.12,cy+E[1]/e2*sc*1.12);place("tPm",cx+E[0]/e2*sc*1.12,cy-E[1]/e2*sc*1.12);
+ place("tDay",cx+A[0]*sc*.5,cy-A[1]*sc*.5);place("tNight",cx-A[0]*sc*.62,cy+A[1]*sc*.62);
+ $("tDay").style.display=A[2]>-.3?"":"none";$("tNight").style.display=A[2]<.4?"":"none";
+ // 月の公転軌道(今の向きから見た1周)
+ ov.clearRect(0,0,W,H);ov.setLineDash([2,5]);ov.lineWidth=1.2;let pv=null;
+ for(let k=0;k<=120;k++){const [ra,de]=moonEq(sim+k/120*27.32*86400000),v=vw(toEF(ra,de,gmn)),x=cx+v[0]*MD*sc,y=cy-v[1]*MD*sc,hid=v[2]<0&&Math.hypot(v[0]*MD,v[1]*MD)<1;
+  if(pv&&!hid&&!pv.h){ov.strokeStyle=v[2]>0?"rgba(190,210,255,.4)":"rgba(190,210,255,.15)";ov.beginPath();ov.moveTo(pv.x,pv.y);ov.lineTo(x,y);ov.stroke()}pv={x,y,h:hid}}
+ ov.setLineDash([]);place("tMoon",cx+mp[0]*sc,cy-mp[1]*sc+.18*sc+14);
+ const age=(((mlam-slam)/D%360)+360)%360/360*29.53,il=(1-Math.cos(mlam-slam))/2;
+ let locTxt=you?"":"位置情報の許可待ち（地域は概算）<br>";const tY=$("tYou");
+ if(you){const la=you.la*D,lo2=you.lo*D,u=[Math.cos(la)*Math.cos(lo2),Math.cos(la)*Math.sin(lo2),Math.sin(la)],uv=vw(u),x=cx+uv[0]*sc,y=cy-uv[1]*sc,el=Math.asin(dot(u,ae))/D,mor=Math.sin(lon-lo2)>0,st=el>8?"昼":el>-6?(mor?"朝":"夕"):"夜";
+  tY.style.display="";
+  if(uv[2]>0){const t=(now/1000)%2;ov.strokeStyle="rgba(255,90,90,"+(1-t/2)*.8+")";ov.lineWidth=2;ov.beginPath();ov.arc(x,y,4+t*14,0,7);ov.stroke();
+   ov.fillStyle="#ff5a5a";ov.strokeStyle="#fff";ov.lineWidth=1.5;ov.beginPath();ov.arc(x,y,4.5,0,7);ov.fill();ov.stroke();
+   tY.textContent="現在地 "+st;place("tYou",x,y-24)}
+  else{tY.textContent="現在地は裏側 "+st;place("tYou",cx,cy-sc*1.5)}
+  locTxt="現在地　"+(you.la>=0?"北緯":"南緯")+Math.abs(you.la).toFixed(2)+"°　"+(you.lo>=0?"東経":"西経")+Math.abs(you.lo).toFixed(2)+"°　太陽高度 "+el.toFixed(0)+"°（"+you.src+"）<br>"}
+ const d=new Date(sim);
+ clock.textContent=d.getFullYear()+"/"+pad(d.getMonth()+1)+"/"+pad(d.getDate())+"  "+pad(d.getHours())+":"+pad(d.getMinutes())+":"+pad(d.getSeconds());
+ const la=dec/D,lo=lon/D,kk=Math.floor((((slam/D)%360)+360)%360/90),NS=["春","夏","秋","冬"];if(kk!==window._k){window._k=kk;$("season").innerHTML=chip("北半球",kk)+chip("南半球",(kk+2)%4)}
+ sub.innerHTML="太陽直下点　"+(la>=0?"北緯":"南緯")+Math.abs(la).toFixed(1)+"°　"+(lo>=0?"東経":"西経")+Math.abs(lo).toFixed(1)+"°<br>"+locTxt+"月齢 "+age.toFixed(1)+"　月の輝面 "+Math.round(il*100)+"%<br>UTC "+pad(d.getUTCHours())+":"+pad(d.getUTCMinutes())+"　・　"+speeds[si][1]+"　・　タップで速度切替";
+ requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+}
+</script>
+</body>
+</html>
